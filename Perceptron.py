@@ -31,8 +31,16 @@ mnist_test_labels=np.eye(10)[np.fromfile("t10k-labels.idx1-ubyte", dtype=np.uint
 #On obtient un tableau de nombre. Mais on souhaite des vecteurs de dimension 10 avec toutes les coordonnées du vecteur qui sont égales à 0 sauf la coordonnée correspondant à la classe de l'image
 #A l'aide de la commande np.eye(10), on peut changer par exemple le nombre 3 en un vecteur de dimension 10 dont toutes les composantes sont nulles sauf la 3ème égale à 1
 
+
+#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+#on utilise ces commandes pour pouvoir faire fonctionner le code qui suit marchant seulement avec Tensorflow 1.X alors qu'ici on possède la version Tensorflow 2.4.0
+
+
 tf.compat.v1.disable_eager_execution()
-tf.compat.v1.disable_v2_behavior()#on utilise cette commande pour pouvoir faire fonctionner le code qui suit marchant seulement avec Tensorflow 1.X alors qu'ici on possède la version Tensorflow 2.4.0
+tf.compat.v1.disable_v2_behavior()
+
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -45,7 +53,7 @@ ph_labels=tf.compat.v1.placeholder(shape=(None,10), dtype=tf.float32)  #placehol
 
 #Pour le placeholder image (resp. label), on lui donne une géométrie de 784 (resp. 10) pour qu'il puisse recueillir les vecteurs images (resp. label) de dimension 784 (resp. 10)
 #Le None à la même utilité que le -1, il permet de ne pas donner un nombre défini d'image ou de label qu'il peut recevoir.
-#Le float32 représente le type des placeholders.
+#Le float32 représente le type des placeholders pouvant ainsi recevoir des décimaux codés en 32 bits.
 
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -55,7 +63,7 @@ ph_labels=tf.compat.v1.placeholder(shape=(None,10), dtype=tf.float32)  #placehol
 
 #On commence d'abord par exprimer les calculs entre l'entrée et la couche intermédiaire du réseau de neurones.
 
-wci=tf.Variable(tf.compat.v1.truncated_normal(shape=(784, nbr_ni)), dtype=tf.float32) #on crée une variable tenderflow qui tire des poids au hasard selon une loi normale (centrée sur 0 et de variance 1) tronquée (à laquelle on enlève les valeurs extrèmes hors de l'intervalle [-2,2] afin de les éviter)
+wci=tf.Variable(tf.compat.v1.truncated_normal(shape=(784, nbr_ni)), dtype=tf.float32) #On crée une variable tenderflow qui tire des poids au hasard selon une loi normale (centrée sur 0 et de variance 1) tronquée (à laquelle on enlève les valeurs extrèmes hors de l'intervalle [-2,2] afin de les éviter)
 #La géométrie de la wci accepte des vecteurs de dim 784 et ressort des vecteurs de dim nbr_ni
 
 bci=tf.Variable(np.zeros(shape=(nbr_ni)), dtype=tf.float32) #on crée un tableau de 100 neurones dont les biais seront initialisées à 0
@@ -72,11 +80,12 @@ sci=tf.nn.sigmoid(sci) #on rentre nos informations pondérées dans une fonction
 
 wcs=tf.Variable(tf.compat.v1.truncated_normal(shape=(nbr_ni, 10)), dtype=tf.float32) #On applique le poids aux informations de la même façon qu'entre la couche d'entrée et celle intermédiaire sauf qu'ici les neurones de sortie reçoivent des vecteurs de dim nbr_ni et qu'il en sort des vecteurs de de dim 10.
 
-bcs=tf.Variable(np.zeros(shape=(10)), dtype=tf.float32)#On crée un tableau de 10 neurones dont les biais seront initialisés à 0
+bcs=tf.Variable(np.zeros(shape=(10)), dtype=tf.float32) #On crée un tableau de 10 neurones dont les biais seront initialisés à 0
 
 scs=tf.matmul(sci, wcs)+bcs #sortie de la couche de sortie. Ici on pondère les informations venant de la couche intermédiaire par les poids.
 
 scso=tf.nn.softmax(scs)#On passe les informations dans la fonction softmax permettant de transformer un vecteur en un vecteur de probabilité (dont la somme de toutes les composantes est égale à 1)
+#Ce vecteur de probabilité nous donne la probabilité que l'IA donne à chacune des valeurs possibles. Par exemple, si l'IA pense à 95% que le chiffre est un 2 et à 5% que le chiffre est un 5, scso sera un vecteur dont les coordonnées seront toutes égales à 0 sauf celles du 2 qui sera égale à 0.95*learning_rate et du 5 qui sera égale à 0.05*learning rate 
 
 
 #--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -98,7 +107,7 @@ accuracy=tf.reduce_mean(tf.cast(tf.equal(tf.argmax(scso, 1), tf.argmax(ph_labels
 #--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
-#On a maintenant terminé de créer nos fonctions. On va maintenant les utiliser.
+#On a terminé de créer nos fonctions. On va maintenant les utiliser.
 
 #On utilise la commande Session.run afin de lancer le réseau de neurones.
 
@@ -108,19 +117,24 @@ with tf.compat.v1.Session() as s:
     s.run(tf.compat.v1.global_variables_initializer()) #On initialise les variables
 
 #On commence l'entrainement qui sera répeté 200 fois
+
+#On crée des listes dans lesquelles on mettra ensuite des valeurs de précision afin de tracer un graphe de l'erreur de l'IA
     
     tab_acc_train=[]
     tab_acc_test=[]
     
-    for id_entrainement in range(nbr_entrainement):
-        print("ID entrainement", id_entrainement)
+    #On crée une boucle for qui nous permettra de réaliser le nombre d'entrainement qu'on veut en modifiant la variable nbr_entrainement
+    
+    for id_entrainement in range(nbr_entrainement): 
+        print("ID entrainement", id_entrainement) #On demande d'afficher le numéro de l'entrainement
         
         for batch in range(0, len(mnist_train_images), taille_batch): #Sur une range entre 0 et la taille totale de la base en avançant par pas de taille_batch soit ici de 100
-            s.run(train,feed_dict={ #on fait appelle à la fonction run et on lui donne la variable train étant la variable d'entrainement.
-                ph_images: mnist_train_images[batch:batch+taille_batch],#On demande, à l'aide du paramètre feed_dict, de placer dans le placeholder image les informations de la base de données allant du rang batch au rang batch+taille_batch soit ici par lot de 100.
-                ph_labels: mnist_train_labels[batch:batch+taille_batch]#Idem pour les labels
+            s.run(train,feed_dict={ #on fait appelle à la fonction run et on lui donne la variable train étant la variable d'entrainement. Le paramètre feed_dict nous permet d'alimenter la mémoire de notre réseau de neurones.
+                ph_images: mnist_train_images[batch:batch+taille_batch],#On place dans le placeholder image les informations de la base de données allant du rang batch au rang batch+taille_batch soit ici par lot de 100.
+                ph_labels: mnist_train_labels[batch:batch+taille_batch]#Idem pour les labels correspondants
             })
-#On calcule la précision après l'entrainement
+
+#On réalise la même manip avec les tableaux de label
             
         tab_acc=[]
         
@@ -132,7 +146,7 @@ with tf.compat.v1.Session() as s:
             
         tab_acc.append(acc) #on place les précisions des différents lots dans un tableau
 
-        print("Accuracy train :", np.mean(tab_acc))
+        print("Accuracy train :", np.mean(tab_acc)) #on affiche la moyenne de celles-ci
 
     #On calcule l'erreur
 
@@ -168,17 +182,17 @@ with tf.compat.v1.Session() as s:
     plot.legend(loc="upper right")
     plot.show()
 
-    resulat=s.run(scso,feed_dict={ph_images: mnist_test_images[0:taille_batch]})#On demande au réseau de faire un calcul avec s.run en utilisant le vecteur de probabilité de sortie de réseau de neurones scso sur une partie des images de test (les 100 premières) 
-    np.set_printoptions(formatter={'float':'{:0.3f}'.format})#on précise le format des tableaux
+    resultat=s.run(scso,feed_dict={ph_images: mnist_test_images[0:taille_batch]}) #On demande au réseau de faire un calcul avec s.run en utilisant le vecteur de probabilité de sortie de réseau de neurones scso sur une partie des images de test (les 100 premières) 
+    np.set_printoptions(formatter={'float':'{:0.3f}'.format}) #on précise le format des tableaux
 
-    for image in range(taille_batch): #pour l'ensemble du lot de 100 on affiche ce que donne le réseau de neurones et le bon label (celui attendu)
+    for image in range(taille_batch): #pour l'ensemble du lot de 100 on affiche ce que donne le réseau de neurones et le bon label (celui attendu). Ici la variable image représente le numéro de l'image dans la base de donnée
     
-        print("image", image)
-        print("sortie du réseau", resulat[image], np.argmax(resulat[image]))
-        print("sortie attendue", mnist_test_labels[image], np.argmax(mnist_test_labels[image]))
+        print("image", image) #On affiche le numéro de l'image
+        print("sortie du réseau", resultat[image], np.argmax(resultat[image])) #On affiche le vecteur sortie par le réseau et la valeur de la coordonnées de celui-ci étant la plus élevée soit celle correspondant au chiffre que l'IA pense avoir reconnu
+        print("sortie attendue", mnist_test_labels[image], np.argmax(mnist_test_labels[image])) #On affiche la sortie attendue
     
         cv2.imshow('image', mnist_test_images[image].reshape(28,28)) #on affiche l'image redimensionnée en 28*28
-        if cv2.waitKey()==ord('q'):
+        if cv2.waitKey()==ord('q'): #lorsque qu'on a parcouru les 100 images, on arrête le programme
             break
 
     
